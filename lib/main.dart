@@ -36,7 +36,7 @@ class WeatherHome extends StatefulWidget {
 
 class _WeatherHomeState extends State<WeatherHome> {
   final TextEditingController _controller = TextEditingController();
-  final String apiKey = '350cfc9570c1e7fa4a0c1dde35259781';
+  final String apiKey = 'YOUR_API_KEY_HERE';
 
   String city = '';
   String country = '';
