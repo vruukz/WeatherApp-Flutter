@@ -48,6 +48,11 @@ flutter build apk --release
 flutter build windows
 ```
 
+**Linux:**
+```bash
+flutter build linux
+```
+
 ## Tech Stack
 
 - Flutter / Dart
