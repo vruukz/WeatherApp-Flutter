@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-void main() {
+void main() async {
+  await dotenv.load(fileName: ".env");
   runApp(const WeatherApp());
 }
 
@@ -36,7 +38,7 @@ class WeatherHome extends StatefulWidget {
 
 class _WeatherHomeState extends State<WeatherHome> {
   final TextEditingController _controller = TextEditingController();
-  final String apiKey = 'YOUR_API_KEY_HERE';
+  final String apiKey = dotenv.env['WEATHER_API_KEY'] ?? '';
 
   String city = '';
   String country = '';
@@ -46,6 +48,45 @@ class _WeatherHomeState extends State<WeatherHome> {
   double? temperature;
   bool loading = false;
   String error = '';
+
+  @override
+  void initState() {
+    super.initState();
+    checkForUpdates();
+  }
+
+  Future<void> checkForUpdates() async {
+    try {
+      final response = await http.get(Uri.parse(
+        'https://raw.githubusercontent.com/vruukz/WeatherApp-Flutter/master/version.json'
+      ));
+      final data = json.decode(response.body);
+      final latestVersion = data['version'];
+
+      if (latestVersion != '1.0.0') {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            backgroundColor: const Color(0xFF161616),
+            title: const Text('Update Available', style: TextStyle(color: Color(0xFFC8F060))),
+            content: Text('Version $latestVersion is available!', style: const TextStyle(color: Color(0xFF666666))),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Later', style: TextStyle(color: Color(0xFF666666))),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Download', style: TextStyle(color: Color(0xFFC8F060))),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      // silently fail
+    }
+  }
 
   Future<void> fetchWeather() async {
     final query = _controller.text.trim();
