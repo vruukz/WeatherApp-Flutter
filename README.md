@@ -16,7 +16,8 @@ Displays real-time weather data with smooth animations, matching a minimal dark 
 
 ## Screenshots
 
-<img width="1914" height="1026" alt="image" src="https://github.com/user-attachments/assets/254d3f1d-1999-4d91-8f1d-6031e368791d" />
+<img width="1913" height="671" alt="image" src="https://github.com/user-attachments/assets/a3a8490f-61be-4978-86fe-2b2c0fbb84ad" />
+
 
 
 ## Setup
