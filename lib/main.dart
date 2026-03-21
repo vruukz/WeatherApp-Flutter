@@ -1,9 +1,11 @@
+import 'package:home_widget/home_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
+@pragma('vm:entry-point')
+Future<void> backgroundCallback(Uri? uri) async {}
 void main() async {
   await dotenv.load(fileName: ".env");
   runApp(const WeatherApp());
@@ -50,6 +52,7 @@ class _WeatherHomeState extends State<WeatherHome> with SingleTickerProviderStat
   String wind = '';
   double? temperature;
   double? rainNextHour;
+  double? rainNext3h;
   bool loading = false;
   String error = '';
   bool isCelsius = true;
@@ -57,6 +60,16 @@ class _WeatherHomeState extends State<WeatherHome> with SingleTickerProviderStat
 
   List<Map<String, dynamic>> hourlyForecast = [];
   List<Map<String, dynamic>> dailyForecast = [];
+  int rainChance = 0;
+
+Future<void> updateWidget() async {
+  print('UPDATING WIDGET: city=$city temp=$temperature');
+  await HomeWidget.saveWidgetData<String>('widget_city', city);
+  await HomeWidget.saveWidgetData<String>('widget_temp', '${temperature!.toStringAsFixed(0)}°C');
+  await HomeWidget.saveWidgetData<String>('widget_rain', 
+    rainChance > 0 ? 'RAIN $rainChance%${rainNext3h != null && rainNext3h! > 0 ? '  ${rainNext3h!.toStringAsFixed(1)}mm' : ''}' : 'NO RAIN');
+  await HomeWidget.updateWidget(androidName: 'WeatherWidgetProvider');
+}
 
   // Translations
   Map<String, Map<String, String>> translations = {
@@ -114,6 +127,7 @@ class _WeatherHomeState extends State<WeatherHome> with SingleTickerProviderStat
 
   @override
   void initState() {
+    HomeWidget.registerBackgroundCallback(backgroundCallback);
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     checkForUpdates();
@@ -221,7 +235,11 @@ class _WeatherHomeState extends State<WeatherHome> with SingleTickerProviderStat
 
       if (currentResponse.statusCode == 200) {
         final List hourlyList = forecastData['list'];
-
+final nextSlot = forecastData['list'][0];
+  rainChance = ((nextSlot['pop'] ?? 0.0) * 100).toInt();
+  rainNext3h = nextSlot.containsKey('rain') 
+    ? (nextSlot['rain']['3h'] ?? 0.0).toDouble() 
+    : 0.0;
         final hourly = hourlyList.take(8).map((h) => {
           'time': DateTime.fromMillisecondsSinceEpoch(h['dt'] * 1000),
           'temp': h['main']['temp'].toDouble(),
@@ -272,6 +290,9 @@ class _WeatherHomeState extends State<WeatherHome> with SingleTickerProviderStat
           dailyForecast = daily.cast<Map<String, dynamic>>();
           loading = false;
         });
+
+        await updateWidget();
+
       } else {
         setState(() { error = t('cityNotFound'); loading = false; });
       }
@@ -379,216 +400,222 @@ class _WeatherHomeState extends State<WeatherHome> with SingleTickerProviderStat
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Title row with settings cog
-              Row(
-                children: [
-                  Text(
-                    t('title'),
-                    style: const TextStyle(fontSize: 11, letterSpacing: 6, color: Color(0xFFC8F060)),
-                  ),
-                  const Spacer(),
-                  GestureDetector(
-                    onTap: showSettings,
-                    child: const Icon(Icons.settings, color: Color(0xFF666666), size: 20),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 32),
-
-              // Search bar
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _controller,
-                      style: const TextStyle(color: Color(0xFFE8E2D9)),
-                      decoration: InputDecoration(
-                        hintText: t('search'),
-                        hintStyle: const TextStyle(color: Color(0xFF666666)),
-                        filled: true,
-                        fillColor: const Color(0xFF161616),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: Color(0xFF252525))),
-                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: Color(0xFF252525))),
-                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: Color(0xFFC8F060))),
-                      ),
-                      onSubmitted: (_) => fetchWeather(),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  ElevatedButton(
-                    onPressed: fetchWeather,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFC8F060),
-                      foregroundColor: const Color(0xFF0D0D0D),
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                    ),
-                    child: Text(t('go'), style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 2)),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-
-              // Favorites
-              if (favorites.isNotEmpty) ...[
-                Text(t('favorites'), style: const TextStyle(fontSize: 10, letterSpacing: 4, color: Color(0xFF666666))),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: favorites.map((fav) => GestureDetector(
-                    onTap: () { _controller.text = fav; fetchWeather(); },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: const Color(0xFF252525)),
-                        borderRadius: BorderRadius.circular(4),
-                        color: const Color(0xFF161616),
-                      ),
-                      child: Text(fav, style: const TextStyle(fontSize: 11, color: Color(0xFFE8E2D9), letterSpacing: 1)),
-                    ),
-                  )).toList(),
-                ),
-                const SizedBox(height: 16),
-              ],
-
-              if (loading) const Center(child: CircularProgressIndicator(color: Color(0xFFC8F060))),
-              if (error.isNotEmpty) Text(error, style: const TextStyle(color: Color(0xFF666666), fontSize: 14)),
-
-              if (temperature != null && !loading) ...[
+  body: SafeArea(
+    child: NestedScrollView(
+      headerSliverBuilder: (context, innerBoxIsScrolled) => [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(32, 32, 32, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Title row with settings cog
                 Row(
                   children: [
-                    Text('$city, $country', style: const TextStyle(fontFamily: 'serif', fontSize: 28, color: Color(0xFFE8E2D9), fontStyle: FontStyle.italic)),
+                    Text(t('title'), style: const TextStyle(fontSize: 11, letterSpacing: 6, color: Color(0xFFC8F060))),
                     const Spacer(),
                     GestureDetector(
-                      onTap: () => toggleFavorite(city),
-                      child: Icon(favorites.contains(city) ? Icons.star : Icons.star_border, color: const Color(0xFFC8F060), size: 24),
+                      onTap: showSettings,
+                      child: const Icon(Icons.settings, color: Color(0xFF666666), size: 20),
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
-                TweenAnimationBuilder<double>(
-                  tween: Tween(begin: 0, end: convertTemp(temperature!)),
-                  duration: const Duration(milliseconds: 800),
-                  builder: (context, value, child) {
-                    return Text(
-                      '${value.toStringAsFixed(0)}${tempUnit()}',
-                      style: const TextStyle(fontFamily: 'serif', fontSize: 72, color: Color(0xFFC8F060), height: 1),
-                    );
-                  },
-                ),
-                const SizedBox(height: 8),
-                Text(description.toUpperCase(), style: const TextStyle(fontSize: 11, letterSpacing: 3, color: Color(0xFF666666))),
-                const SizedBox(height: 24),
-                Container(height: 1, color: const Color(0xFF252525)),
-                const SizedBox(height: 16),
+                const SizedBox(height: 32),
+
+                // Search bar
                 Row(
                   children: [
-                    _statItem(t('humidity'), humidity),
-                    const SizedBox(width: 32),
-                    _statItem(t('wind'), wind),
-                    const SizedBox(width: 32),
-                    _statItem(t('rain1h'), rainNextHour != null ? '${rainNextHour!.toStringAsFixed(1)} mm' : '0 mm'),
+                    Expanded(
+                      child: TextField(
+                        controller: _controller,
+                        style: const TextStyle(color: Color(0xFFE8E2D9)),
+                        decoration: InputDecoration(
+                          hintText: t('search'),
+                          hintStyle: const TextStyle(color: Color(0xFF666666)),
+                          filled: true,
+                          fillColor: const Color(0xFF161616),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: Color(0xFF252525))),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: Color(0xFF252525))),
+                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: Color(0xFFC8F060))),
+                        ),
+                        onSubmitted: (_) => fetchWeather(),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    ElevatedButton(
+                      onPressed: fetchWeather,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFC8F060),
+                        foregroundColor: const Color(0xFF0D0D0D),
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                      ),
+                      child: Text(t('go'), style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 2)),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 24),
-                TabBar(
-                  controller: _tabController,
-                  labelColor: const Color(0xFFC8F060),
-                  unselectedLabelColor: const Color(0xFF666666),
-                  indicatorColor: const Color(0xFFC8F060),
-                  labelStyle: const TextStyle(fontSize: 10, letterSpacing: 2),
-                  tabs: [Tab(text: t('now')), Tab(text: t('hourly')), Tab(text: t('days'))],
-                ),
-                const SizedBox(height: 16),
-                Expanded(
-                  child: TabBarView(
-                    controller: _tabController,
-                    children: [
-                      // NOW
-                      SingleChildScrollView(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _infoRow(t('description'), description),
-                            _infoRow(t('humidity'), humidity),
-                            _infoRow(t('wind'), wind),
-                            _infoRow(t('rainNext'), '${rainNextHour?.toStringAsFixed(1) ?? 0} mm'),
-                          ],
+
+                // Favorites
+                if (favorites.isNotEmpty) ...[
+                  Text(t('favorites'), style: const TextStyle(fontSize: 10, letterSpacing: 4, color: Color(0xFF666666))),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: favorites.map((fav) => GestureDetector(
+                      onTap: () { _controller.text = fav; fetchWeather(); },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: const Color(0xFF252525)),
+                          borderRadius: BorderRadius.circular(4),
+                          color: const Color(0xFF161616),
                         ),
+                        child: Text(fav, style: const TextStyle(fontSize: 11, color: Color(0xFFE8E2D9), letterSpacing: 1)),
                       ),
+                    )).toList(),
+                  ),
+                  const SizedBox(height: 16),
+                ],
 
-                      // HOURLY
-                      ListView.builder(
-                        itemCount: hourlyForecast.length,
-                        itemBuilder: (context, index) {
-                          final h = hourlyForecast[index];
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            child: Row(
-                              children: [
-                                SizedBox(width: 48, child: Text(_formatHour(h['time']), style: const TextStyle(fontSize: 11, color: Color(0xFF666666), letterSpacing: 1))),
-                                Text('${convertTemp(h['temp'] as double).toStringAsFixed(0)}${tempUnit()}', style: const TextStyle(fontSize: 14, color: Color(0xFFE8E2D9))),
-                                const SizedBox(width: 12),
-                                Expanded(child: Text((h['description'] as String).toUpperCase(), style: const TextStyle(fontSize: 9, color: Color(0xFF666666), letterSpacing: 1))),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    if ((h['rain'] as double) > 0)
-                                      Text('${(h['rain'] as double).toStringAsFixed(1)}mm', style: const TextStyle(fontSize: 10, color: Color(0xFFC8F060))),
-                                    Text('${h['rainChance']}%', style: const TextStyle(fontSize: 10, color: Color(0xFF666666))),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
+                if (loading) const Center(child: CircularProgressIndicator(color: Color(0xFFC8F060))),
+                if (error.isNotEmpty) Text(error, style: const TextStyle(color: Color(0xFF666666), fontSize: 14)),
 
-                      // 5 DAYS
-                      ListView.builder(
-                        itemCount: dailyForecast.length,
-                        itemBuilder: (context, index) {
-                          final d = dailyForecast[index];
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 10),
-                            child: Row(
-                              children: [
-                                SizedBox(width: 40, child: Text(_formatDay(d['date']), style: const TextStyle(fontSize: 11, color: Color(0xFF666666), letterSpacing: 1))),
-                                const SizedBox(width: 8),
-                                Text('${convertTemp(d['maxTemp'] as double).toStringAsFixed(0)}°', style: const TextStyle(fontSize: 14, color: Color(0xFFC8F060))),
-                                const SizedBox(width: 6),
-                                Text('${convertTemp(d['minTemp'] as double).toStringAsFixed(0)}°', style: const TextStyle(fontSize: 14, color: Color(0xFF666666))),
-                                const SizedBox(width: 12),
-                                Expanded(child: Text((d['description'] as String).toUpperCase(), style: const TextStyle(fontSize: 9, color: Color(0xFF666666), letterSpacing: 1))),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    if ((d['rain'] as double) > 0)
-                                      Text('${(d['rain'] as double).toStringAsFixed(1)}mm', style: const TextStyle(fontSize: 10, color: Color(0xFFC8F060))),
-                                    Text('${d['rainChance']}%', style: const TextStyle(fontSize: 10, color: Color(0xFF666666))),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          );
-                        },
+                if (temperature != null && !loading) ...[
+                  Row(
+                    children: [
+                      Text('$city, $country', style: const TextStyle(fontFamily: 'serif', fontSize: 28, color: Color(0xFFE8E2D9), fontStyle: FontStyle.italic)),
+                      const Spacer(),
+                      GestureDetector(
+                        onTap: () => toggleFavorite(city),
+                        child: Icon(favorites.contains(city) ? Icons.star : Icons.star_border, color: const Color(0xFFC8F060), size: 24),
                       ),
                     ],
                   ),
-                ),
+                  const SizedBox(height: 16),
+                  TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0, end: convertTemp(temperature!)),
+                    duration: const Duration(milliseconds: 800),
+                    builder: (context, value, child) {
+                      return Text(
+                        '${value.toStringAsFixed(0)}${tempUnit()}',
+                        style: const TextStyle(fontFamily: 'serif', fontSize: 72, color: Color(0xFFC8F060), height: 1),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  Text(description.toUpperCase(), style: const TextStyle(fontSize: 11, letterSpacing: 3, color: Color(0xFF666666))),
+                  const SizedBox(height: 24),
+                  Container(height: 1, color: const Color(0xFF252525)),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      _statItem(t('humidity'), humidity),
+                      const SizedBox(width: 32),
+                      _statItem(t('wind'), wind),
+                      const SizedBox(width: 32),
+                      _statItem(t('rain1h'), rainNextHour != null ? '${rainNextHour!.toStringAsFixed(1)} mm' : '0 mm'),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  TabBar(
+                    controller: _tabController,
+                    labelColor: const Color(0xFFC8F060),
+                    unselectedLabelColor: const Color(0xFF666666),
+                    indicatorColor: const Color(0xFFC8F060),
+                    labelStyle: const TextStyle(fontSize: 10, letterSpacing: 2),
+                    tabs: [Tab(text: t('now')), Tab(text: t('hourly')), Tab(text: t('days'))],
+                  ),
+                  const SizedBox(height: 16),
+                ],
               ],
-            ],
+            ),
           ),
         ),
-      ),
-    );
+      ],
+      body: temperature != null && !loading
+        ? Padding(
+            padding: const EdgeInsets.fromLTRB(32, 0, 32, 32),
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                // NOW
+                SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _infoRow(t('description'), description),
+                      _infoRow(t('humidity'), humidity),
+                      _infoRow(t('wind'), wind),
+                      _infoRow(t('rainNext'), '${rainNextHour?.toStringAsFixed(1) ?? 0} mm'),
+                    ],
+                  ),
+                ),
+
+                // HOURLY
+                ListView.builder(
+                  itemCount: hourlyForecast.length,
+                  itemBuilder: (context, index) {
+                    final h = hourlyForecast[index];
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Row(
+                        children: [
+                          SizedBox(width: 48, child: Text(_formatHour(h['time']), style: const TextStyle(fontSize: 11, color: Color(0xFF666666), letterSpacing: 1))),
+                          Text('${convertTemp(h['temp'] as double).toStringAsFixed(0)}${tempUnit()}', style: const TextStyle(fontSize: 14, color: Color(0xFFE8E2D9))),
+                          const SizedBox(width: 12),
+                          Expanded(child: Text((h['description'] as String).toUpperCase(), style: const TextStyle(fontSize: 9, color: Color(0xFF666666), letterSpacing: 1))),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              if ((h['rain'] as double) > 0)
+                                Text('${(h['rain'] as double).toStringAsFixed(1)}mm', style: const TextStyle(fontSize: 10, color: Color(0xFFC8F060))),
+                              Text('${h['rainChance']}%', style: const TextStyle(fontSize: 10, color: Color(0xFF666666))),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+
+                // 5 DAYS
+                ListView.builder(
+                  itemCount: dailyForecast.length,
+                  itemBuilder: (context, index) {
+                    final d = dailyForecast[index];
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      child: Row(
+                        children: [
+                          SizedBox(width: 40, child: Text(_formatDay(d['date']), style: const TextStyle(fontSize: 11, color: Color(0xFF666666), letterSpacing: 1))),
+                          const SizedBox(width: 8),
+                          Text('${convertTemp(d['maxTemp'] as double).toStringAsFixed(0)}°', style: const TextStyle(fontSize: 14, color: Color(0xFFC8F060))),
+                          const SizedBox(width: 6),
+                          Text('${convertTemp(d['minTemp'] as double).toStringAsFixed(0)}°', style: const TextStyle(fontSize: 14, color: Color(0xFF666666))),
+                          const SizedBox(width: 12),
+                          Expanded(child: Text((d['description'] as String).toUpperCase(), style: const TextStyle(fontSize: 9, color: Color(0xFF666666), letterSpacing: 1))),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              if ((d['rain'] as double) > 0)
+                                Text('${(d['rain'] as double).toStringAsFixed(1)}mm', style: const TextStyle(fontSize: 10, color: Color(0xFFC8F060))),
+                              Text('${d['rainChance']}%', style: const TextStyle(fontSize: 10, color: Color(0xFF666666))),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          )
+        : const SizedBox(),
+    ),
+  ),
+);
   }
 
   Widget _statItem(String label, String value) {
