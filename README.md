@@ -8,17 +8,21 @@ Displays real-time weather data with smooth animations, matching a minimal dark 
 
 ## Features
 
-- Real-time weather data via OpenWeatherMap API
+- Real-time current weather via OpenWeatherMap API
 - Animated temperature display
-- Humidity and wind info
+- Hourly forecast (next 24h) with rain chance
+- 5-day forecast with min/max temperatures
+- Rain quantity and probability for next 3 hours
+- Favorite cities — save and quick-load
 - In-app update notifications
-- Minimal dark UI
+- Language toggle — English / Romanian
+- Temperature unit toggle — Celsius / Fahrenheit
+- Android home screen widget with clock, date, temperature and rain chance
+- Minimal dark UI matching portfolio color scheme
 
 ## Screenshots
 
 <img width="1913" height="671" alt="image" src="https://github.com/user-attachments/assets/a3a8490f-61be-4978-86fe-2b2c0fbb84ad" />
-
-
 
 ## Setup
 
@@ -54,12 +58,20 @@ flutter build windows
 flutter build linux
 ```
 
+## Android Widget
+
+After installing the APK, long press your home screen → Widgets → find WeatherApp and add it.
+The widget shows current time, date, city, temperature and rain chance for the next 3 hours.
+It updates automatically when you search a city in the app.
+
 ## Tech Stack
 
 - Flutter / Dart
 - OpenWeatherMap API
 - flutter_dotenv
 - http package
+- shared_preferences
+- home_widget
 
 ## Version
 
