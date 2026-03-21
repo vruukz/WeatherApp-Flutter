@@ -24,6 +24,10 @@ Displays real-time weather data with smooth animations, matching a minimal dark 
 
 <img width="1913" height="671" alt="image" src="https://github.com/user-attachments/assets/a3a8490f-61be-4978-86fe-2b2c0fbb84ad" />
 
+![androidwidgetss](https://github.com/user-attachments/assets/7b4c0bcb-3c40-431a-b080-062c1b654628)
+
+
+
 ## Setup
 
 1. Clone the repo
