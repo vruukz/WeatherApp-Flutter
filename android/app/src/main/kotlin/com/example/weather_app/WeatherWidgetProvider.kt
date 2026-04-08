@@ -22,12 +22,14 @@ class WeatherWidgetProvider : AppWidgetProvider() {
             val city = prefs.getString("widget_city", "no city") ?: "no city"
             val temp = prefs.getString("widget_temp", "no temp") ?: "no temp"
             val rain = prefs.getString("widget_rain", "") ?: ""
+            val sunset = prefs.getString("widget_sunset", "🌅 --:--") ?: "🌅 --:--"
 
-            Log.d("WeatherWidget", "city=$city temp=$temp rain=$rain")
+            Log.d("WeatherWidget", "city=$city temp=$temp rain=$rain sunset=$sunset")
 
             views.setTextViewText(R.id.widget_city, city)
             views.setTextViewText(R.id.widget_temp, temp)
             views.setTextViewText(R.id.widget_rain, rain)
+            views.setTextViewText(R.id.widget_sunset, sunset)
 
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }

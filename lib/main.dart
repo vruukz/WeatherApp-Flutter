@@ -61,13 +61,15 @@ class _WeatherHomeState extends State<WeatherHome> with SingleTickerProviderStat
   List<Map<String, dynamic>> hourlyForecast = [];
   List<Map<String, dynamic>> dailyForecast = [];
   int rainChance = 0;
+  String? sunsetTime;
 
 Future<void> updateWidget() async {
-  print('UPDATING WIDGET: city=$city temp=$temperature');
+  print('UPDATING WIDGET: city=$city temp=$temperature sunset=$sunsetTime');
   await HomeWidget.saveWidgetData<String>('widget_city', city);
   await HomeWidget.saveWidgetData<String>('widget_temp', '${temperature!.toStringAsFixed(0)}°C');
   await HomeWidget.saveWidgetData<String>('widget_rain', 
     rainChance > 0 ? 'RAIN $rainChance%${rainNext3h != null && rainNext3h! > 0 ? '  ${rainNext3h!.toStringAsFixed(1)}mm' : ''}' : 'NO RAIN');
+  await HomeWidget.saveWidgetData<String>('widget_sunset', '🌅 ${sunsetTime ?? '--:--'}');
   await HomeWidget.updateWidget(androidName: 'WeatherWidgetProvider');
 }
 
@@ -289,6 +291,10 @@ final nextSlot = forecastData['list'][0];
           hourlyForecast = hourly.cast<Map<String, dynamic>>();
           dailyForecast = daily.cast<Map<String, dynamic>>();
           loading = false;
+          final sunsetUnix = currentData['sys']['sunset'];
+          final sunsetDt = DateTime.fromMillisecondsSinceEpoch(sunsetUnix * 1000);
+          sunsetTime = '${sunsetDt.hour.toString().padLeft(2, '0')}:${sunsetDt.minute.toString().padLeft(2, '0')}';
+          print('SUNSET TIME SET: $sunsetTime');
         });
 
         await updateWidget();
