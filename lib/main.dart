@@ -2,12 +2,10 @@ import 'package:home_widget/home_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 @pragma('vm:entry-point')
 Future<void> backgroundCallback(Uri? uri) async {}
 void main() async {
-  await dotenv.load(fileName: ".env");
   runApp(const WeatherApp());
 }
 
@@ -41,7 +39,7 @@ class WeatherHome extends StatefulWidget {
 
 class _WeatherHomeState extends State<WeatherHome> with SingleTickerProviderStateMixin {
   final TextEditingController _controller = TextEditingController();
-  final String apiKey = dotenv.env['WEATHER_API_KEY'] ?? '';
+  final String apiKey = const String.fromEnvironment('WEATHER_API_KEY');
   late TabController _tabController;
 
   List<String> favorites = [];
