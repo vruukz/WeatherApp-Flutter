@@ -14,15 +14,16 @@ class WeatherWidgetProvider : AppWidgetProvider() {
         appWidgetIds: IntArray
     ) {
         Log.d("WeatherWidget", "onUpdate called with ${appWidgetIds.size} widgets")
-        
+
         for (appWidgetId in appWidgetIds) {
             val views = RemoteViews(context.packageName, R.layout.weather_widget)
-            
+
             val prefs = HomeWidgetPlugin.getData(context)
             val city = prefs.getString("widget_city", "no city") ?: "no city"
             val temp = prefs.getString("widget_temp", "no temp") ?: "no temp"
             val rain = prefs.getString("widget_rain", "") ?: ""
             val sunset = prefs.getString("widget_sunset", "🌅 --:--") ?: "🌅 --:--"
+            val accent = prefs.getLong("widget_accent", 0xFFC8F060.toLong()).toInt()
 
             Log.d("WeatherWidget", "city=$city temp=$temp rain=$rain sunset=$sunset")
 
@@ -30,6 +31,8 @@ class WeatherWidgetProvider : AppWidgetProvider() {
             views.setTextViewText(R.id.widget_temp, temp)
             views.setTextViewText(R.id.widget_rain, rain)
             views.setTextViewText(R.id.widget_sunset, sunset)
+            views.setTextColor(R.id.widget_time, accent)
+            views.setTextColor(R.id.widget_temp, accent)
 
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }

@@ -3,14 +3,46 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 @pragma('vm:entry-point')
 Future<void> backgroundCallback(Uri? uri) async {}
 void main() async {
   runApp(const WeatherApp());
 }
 
-class WeatherApp extends StatelessWidget {
+const defaultAccent = Color(0xFFC8F060);
+
+class WeatherApp extends StatefulWidget {
   const WeatherApp({super.key});
+
+  @override
+  State<WeatherApp> createState() => _WeatherAppState();
+}
+
+class _WeatherAppState extends State<WeatherApp> {
+  Color _accent = defaultAccent;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAccent();
+  }
+
+  Future<void> _loadAccent() async {
+    final prefs = await SharedPreferences.getInstance();
+    final value = prefs.getInt('accent_color');
+    if (value != null) {
+      setState(() => _accent = Color(value));
+    }
+  }
+
+  Future<void> _setAccent(Color color) async {
+    setState(() => _accent = color);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('accent_color', color.value);
+    await HomeWidget.saveWidgetData<int>('widget_accent', color.value);
+    await HomeWidget.updateWidget(androidName: 'WeatherWidgetProvider');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -20,24 +52,32 @@ class WeatherApp extends StatelessWidget {
       theme: ThemeData(
         scaffoldBackgroundColor: const Color(0xFF0D0D0D),
         colorScheme: ColorScheme.dark(
-          primary: const Color(0xFFC8F060),
+          primary: _accent,
           surface: const Color(0xFF161616),
         ),
         fontFamily: 'monospace',
       ),
-      home: const WeatherHome(),
+      home: WeatherHome(accent: _accent, onAccentChanged: _setAccent),
     );
   }
 }
 
 class WeatherHome extends StatefulWidget {
-  const WeatherHome({super.key});
+  final Color accent;
+  final ValueChanged<Color> onAccentChanged;
+
+  const WeatherHome({
+    super.key,
+    required this.accent,
+    required this.onAccentChanged,
+  });
 
   @override
   State<WeatherHome> createState() => _WeatherHomeState();
 }
 
 class _WeatherHomeState extends State<WeatherHome> with SingleTickerProviderStateMixin {
+  Color get accent => widget.accent;
   final TextEditingController _controller = TextEditingController();
   final String apiKey = const String.fromEnvironment('WEATHER_API_KEY');
   late TabController _tabController;
@@ -96,6 +136,8 @@ Future<void> updateWidget() async {
       'language': 'Language',
       'unit': 'Temperature Unit',
       'rainChance': 'Rain chance',
+      'accentColor': 'Accent Color',
+      'pickColor': 'Tap to choose a color',
     },
     'ro': {
       'title': 'VREME',
@@ -120,6 +162,8 @@ Future<void> updateWidget() async {
       'language': 'Limbă',
       'unit': 'Unitate Temperatură',
       'rainChance': 'Șansă ploaie',
+      'accentColor': 'Culoare Accent',
+      'pickColor': 'Apasă pentru a alege o culoare',
     },
   };
 
@@ -175,7 +219,7 @@ Future<void> updateWidget() async {
           context: context,
           builder: (context) => AlertDialog(
             backgroundColor: const Color(0xFF161616),
-            title: Text(t('updateTitle'), style: const TextStyle(color: Color(0xFFC8F060))),
+            title: Text(t('updateTitle'), style: TextStyle(color: accent)),
             content: Text('Version $latestVersion ${t('updateMsg')}', style: const TextStyle(color: Color(0xFF666666))),
             actions: [
               TextButton(
@@ -184,7 +228,7 @@ Future<void> updateWidget() async {
               ),
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: Text(t('download'), style: const TextStyle(color: Color(0xFFC8F060))),
+                child: Text(t('download'), style: TextStyle(color: accent)),
               ),
             ],
           ),
@@ -305,6 +349,39 @@ final nextSlot = forecastData['list'][0];
     }
   }
 
+  void _openAccentPicker(void Function(void Function()) setModalState) {
+    Color pending = accent;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF161616),
+        title: Text(t('accentColor'), style: const TextStyle(color: Color(0xFFE8E2D9))),
+        content: SingleChildScrollView(
+          child: ColorPicker(
+            pickerColor: pending,
+            onColorChanged: (color) => pending = color,
+            enableAlpha: false,
+            labelTypes: const [],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              widget.onAccentChanged(pending);
+              setModalState(() {});
+              Navigator.of(context).pop();
+            },
+            child: const Text('Apply'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void showSettings() {
     showModalBottomSheet(
       context: context,
@@ -319,8 +396,31 @@ final nextSlot = forecastData['list'][0];
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(t('settings'), style: const TextStyle(fontSize: 11, letterSpacing: 4, color: Color(0xFFC8F060))),
+              Text(t('settings'), style: TextStyle(fontSize: 11, letterSpacing: 4, color: accent)),
               const SizedBox(height: 32),
+
+              // Accent color
+              Text(t('accentColor'), style: const TextStyle(fontSize: 12, color: Color(0xFF666666), letterSpacing: 1)),
+              const SizedBox(height: 12),
+              GestureDetector(
+                onTap: () => _openAccentPicker(setModalState),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: accent,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: const Color(0xFF252525)),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(t('pickColor'), style: const TextStyle(fontSize: 12, color: Color(0xFFE8E2D9))),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
 
               // Language
               Text(t('language'), style: const TextStyle(fontSize: 12, color: Color(0xFF666666), letterSpacing: 1)),
@@ -374,15 +474,15 @@ final nextSlot = forecastData['list'][0];
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          border: Border.all(color: selected ? const Color(0xFFC8F060) : const Color(0xFF252525)),
+          border: Border.all(color: selected ? accent : const Color(0xFF252525)),
           borderRadius: BorderRadius.circular(4),
-          color: selected ? const Color(0xFFC8F060).withOpacity(0.1) : const Color(0xFF0D0D0D),
+          color: selected ? accent.withOpacity(0.1) : const Color(0xFF0D0D0D),
         ),
         child: Text(
           label,
           style: TextStyle(
             fontSize: 11,
-            color: selected ? const Color(0xFFC8F060) : const Color(0xFF666666),
+            color: selected ? accent : const Color(0xFF666666),
             letterSpacing: 1,
           ),
         ),
@@ -416,7 +516,7 @@ final nextSlot = forecastData['list'][0];
                 // Title row with settings cog
                 Row(
                   children: [
-                    Text(t('title'), style: const TextStyle(fontSize: 11, letterSpacing: 6, color: Color(0xFFC8F060))),
+                    Text(t('title'), style: TextStyle(fontSize: 11, letterSpacing: 6, color: accent)),
                     const Spacer(),
                     GestureDetector(
                       onTap: showSettings,
@@ -440,7 +540,7 @@ final nextSlot = forecastData['list'][0];
                           fillColor: const Color(0xFF161616),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: Color(0xFF252525))),
                           enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: Color(0xFF252525))),
-                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: const BorderSide(color: Color(0xFFC8F060))),
+                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(4), borderSide: BorderSide(color: accent)),
                         ),
                         onSubmitted: (_) => fetchWeather(),
                       ),
@@ -449,7 +549,7 @@ final nextSlot = forecastData['list'][0];
                     ElevatedButton(
                       onPressed: fetchWeather,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFC8F060),
+                        backgroundColor: accent,
                         foregroundColor: const Color(0xFF0D0D0D),
                         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
@@ -483,7 +583,7 @@ final nextSlot = forecastData['list'][0];
                   const SizedBox(height: 16),
                 ],
 
-                if (loading) const Center(child: CircularProgressIndicator(color: Color(0xFFC8F060))),
+                if (loading) Center(child: CircularProgressIndicator(color: accent)),
                 if (error.isNotEmpty) Text(error, style: const TextStyle(color: Color(0xFF666666), fontSize: 14)),
 
                 if (temperature != null && !loading) ...[
@@ -493,7 +593,7 @@ final nextSlot = forecastData['list'][0];
                       const Spacer(),
                       GestureDetector(
                         onTap: () => toggleFavorite(city),
-                        child: Icon(favorites.contains(city) ? Icons.star : Icons.star_border, color: const Color(0xFFC8F060), size: 24),
+                        child: Icon(favorites.contains(city) ? Icons.star : Icons.star_border, color: accent, size: 24),
                       ),
                     ],
                   ),
@@ -504,7 +604,7 @@ final nextSlot = forecastData['list'][0];
                     builder: (context, value, child) {
                       return Text(
                         '${value.toStringAsFixed(0)}${tempUnit()}',
-                        style: const TextStyle(fontFamily: 'serif', fontSize: 72, color: Color(0xFFC8F060), height: 1),
+                        style: TextStyle(fontFamily: 'serif', fontSize: 72, color: accent, height: 1),
                       );
                     },
                   ),
@@ -525,9 +625,9 @@ final nextSlot = forecastData['list'][0];
                   const SizedBox(height: 24),
                   TabBar(
                     controller: _tabController,
-                    labelColor: const Color(0xFFC8F060),
+                    labelColor: accent,
                     unselectedLabelColor: const Color(0xFF666666),
-                    indicatorColor: const Color(0xFFC8F060),
+                    indicatorColor: accent,
                     labelStyle: const TextStyle(fontSize: 10, letterSpacing: 2),
                     tabs: [Tab(text: t('now')), Tab(text: t('hourly')), Tab(text: t('days'))],
                   ),
@@ -574,7 +674,7 @@ final nextSlot = forecastData['list'][0];
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               if ((h['rain'] as double) > 0)
-                                Text('${(h['rain'] as double).toStringAsFixed(1)}mm', style: const TextStyle(fontSize: 10, color: Color(0xFFC8F060))),
+                                Text('${(h['rain'] as double).toStringAsFixed(1)}mm', style: TextStyle(fontSize: 10, color: accent)),
                               Text('${h['rainChance']}%', style: const TextStyle(fontSize: 10, color: Color(0xFF666666))),
                             ],
                           ),
@@ -595,7 +695,7 @@ final nextSlot = forecastData['list'][0];
                         children: [
                           SizedBox(width: 40, child: Text(_formatDay(d['date']), style: const TextStyle(fontSize: 11, color: Color(0xFF666666), letterSpacing: 1))),
                           const SizedBox(width: 8),
-                          Text('${convertTemp(d['maxTemp'] as double).toStringAsFixed(0)}°', style: const TextStyle(fontSize: 14, color: Color(0xFFC8F060))),
+                          Text('${convertTemp(d['maxTemp'] as double).toStringAsFixed(0)}°', style: TextStyle(fontSize: 14, color: accent)),
                           const SizedBox(width: 6),
                           Text('${convertTemp(d['minTemp'] as double).toStringAsFixed(0)}°', style: const TextStyle(fontSize: 14, color: Color(0xFF666666))),
                           const SizedBox(width: 12),
@@ -604,7 +704,7 @@ final nextSlot = forecastData['list'][0];
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               if ((d['rain'] as double) > 0)
-                                Text('${(d['rain'] as double).toStringAsFixed(1)}mm', style: const TextStyle(fontSize: 10, color: Color(0xFFC8F060))),
+                                Text('${(d['rain'] as double).toStringAsFixed(1)}mm', style: TextStyle(fontSize: 10, color: accent)),
                               Text('${d['rainChance']}%', style: const TextStyle(fontSize: 10, color: Color(0xFF666666))),
                             ],
                           ),
